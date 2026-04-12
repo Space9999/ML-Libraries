@@ -67,7 +67,7 @@ class Dense(Layer):
     def parameters(self):
         return np.prod(self.weight.shape) + np.prod(self.weight_bias.shape)
     
-    def forward_pass(self, input):
+    def forward_pass(self, input, training = True):
         self.layer_input = input
         return input.dot(self.weight) + self.weight_bias
     

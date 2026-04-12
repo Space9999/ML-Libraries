@@ -7,7 +7,7 @@ class Base_Neural_Network():
         self.optimizer = optimizer
         self.layers = []
         self.errors = {"training": [], "validation": []}
-        self.loss_function = loss()
+        self.loss_function = loss
         self.loss_gradient = loss_grad
 
         self.val_set = None
