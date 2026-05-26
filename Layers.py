@@ -11,7 +11,8 @@ activation_functions = {
     'leaky_relu': Activations_Functions.leaky_relu,
     'elu': Activations_Functions.elu,
     'selu': Activations_Functions.selu,
-    'soft_plus': Activations_Functions.soft_plus
+    'soft_plus': Activations_Functions.soft_plus,
+    'softmax': Activations_Functions.softmax
 }
 
 activation_gradients = {
@@ -19,6 +20,7 @@ activation_gradients = {
     'sigmoid_gradient': Activations_Functions.sigmoid_grad,
     'relu_gradient': Activations_Functions.relu_grad,
     'leaky_relu_gradient': Activations_Functions.leaky_relu_grad,
+    'softmax_gradient': Activations_Functions.softmax_grad
 }
 
 class Layer(object):
@@ -83,7 +85,7 @@ class Dense(Layer):
             grad_weight_bias = np.sum(accumulated_gradient, axis = 0, keepdims = True)
 
             self.weight = self.weight_optimizer.update(self.weight, grad_weight)
-            self.weight_bias = self.weight_bias_optimizer.update(self.weight, grad_weight_bias)
+            self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
         
         accumulated_gradient = accumulated_gradient.dot(weight.T)
         return accumulated_gradient
@@ -171,7 +173,29 @@ class RNN(Layer):
     
     def get_output_shape(self):
         return self.input_shape
-        
+
+class Activation(Layer):
+
+    def __init__(self, name):
+        self.activation_function = activation_functions[name]
+        self.activation_name = name
+        self.trainable = True   
+    
+    def get_layer_name(self):
+        return "(%s) Activation" % (self.activation_name)
+    
+    def forward_pass(self, X, trainable = True):
+        self.layer_input = X
+        return self.activation_function(X)
+    
+    def backward_pass(self, accumulated_grad):
+        if self.activation_name == 'softmax': # Edge case for softmax function to use full jacobian matrix
+            softmax_output = self.activation_function(self.layer_input)
+            return activation_gradients['softmax_gradient'](accumulated_grad, softmax_output)
+        return accumulated_grad * activation_gradients[self.activation_name + '_gradient'](self.layer_input)
+    
+    def get_output_shape(self):
+        return self.input_shape
 
 
 

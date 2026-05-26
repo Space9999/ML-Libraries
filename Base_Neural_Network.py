@@ -3,7 +3,7 @@ import numpy as np
 class Base_Neural_Network():
 
     # Validation data must be in a tuple format (X set, y set)
-    def __init__(self, optimizer, loss, loss_grad, validation_data):
+    def __init__(self, optimizer, loss, loss_grad, validation_data = None):
         self.optimizer = optimizer
         self.layers = []
         self.errors = {"training": [], "validation": []}
@@ -24,11 +24,11 @@ class Base_Neural_Network():
         
         # If the layer added is not the 1st one, then set the shape of the input to that of the output of last layer added
         if self.layers:
-            layer.set_input_shape(self.layers[-1].output_shape())
+            layer.set_input_shape(self.layers[-1].get_output_shape())
 
         # If the layer needs to be initialized, then initalize layer with appropriate optimizer and weights
-        if hasattr(layer, 'initalize_layer'):
-            layer.initialize(optimizer = self.optimizer)
+        if hasattr(layer, 'initialize_layer'):
+            layer.initialize_layer(optimizer = self.optimizer)
         
         self.layers.append(layer)
 
@@ -52,16 +52,15 @@ class Base_Neural_Network():
         for i in range(epochs):
             batch_loss = []
             for j in range(0, len(X), batch_size):
-                batch_loss = []
                 X_batch = X[j : j + batch_size]
                 y_batch = y[j : j + batch_size]
                 loss = self.train_batch(X_batch, y_batch)
-                batch_loss.append(loss)
+                batch_loss.append(np.mean(loss))
 
-            training_loss[i] = np.mean(batch_loss)
+            training_loss.append(np.mean(batch_loss))
 
             if self.val_set is not None:
-                val_loss[i] = self.test_batch(self.val_set["X"], self.val_set["y"])
+                val_loss.append(self.test_batch(self.val_set["X"], self.val_set["y"]))
         
         return training_loss, val_loss
     

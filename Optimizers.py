@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import random
-
+"""
 class Gradient_Descent:
 
     # In this case, the gradient function can only be for a single variable function (as the value must be a number)
@@ -120,6 +120,7 @@ class Simulated_Annealing:
                     history.append(best_val)
         
         return best, best_val, history
+""" # Legacy Code (for reference purposes only)
 
 # Simplified version of SGD with momentum for the purposes of implementation in layers
 # Note: We are optimizing for min weight because the loss function must have a positive direct relationship with weight 
@@ -137,8 +138,33 @@ class Simplified_SGD:
         self.weight_update = self.momentum + self.weight_update + (1 - self.momentum) * gradient_weight
 
         return weight - self.learning_rate * self.weight_update
-        
 
+# Adam optimizer
+class Adam():
+    def __init__(self, learning_rate = 0.001, b1 = 0.9, b2 = 0.999):
+        self.learning_rate = learning_rate
+        self.epsilon = 1e-8
+        self.t = 0
+        self.m = None
+        self.v = None
+        self.b1 = b1
+        self.b2 = b2
+    
+    def update(self, weight, grad_weight):
+        if self.m is None:
+            self.m = np.zeros(np.shape(grad_weight))
+            self.v = np.zeros(np.shape(grad_weight))
+        
+        self.m = self.b1 * self.m + (1 - self.b1) * grad_weight
+        self.v = self.b2 * self.v + (1 - self.b2) * grad_weight ** 2
+
+        self.t += 1
+        m_hat = self.m / (1 - self.b1**self.t)
+        v_hat = self.v / (1 - self.b2**self.t)
+
+        self.weight_update = self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
+
+        return weight - self.weight_update
 
 
 

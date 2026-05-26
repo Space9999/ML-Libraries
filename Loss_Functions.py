@@ -1,7 +1,5 @@
 import numpy as np
 
-epsilon = 1e-15
-
 def mse(y, y_pred):
     return np.sum((y - y_pred) ** 2) / np.size(y)
 
@@ -40,12 +38,21 @@ def Huber_grad(y, y_pred, delta):
 
 # For binary classification (y_pred is either 1 or -1)
 def cross_entropy(y, y_pred):
-    return -np.sum(y * np.log10(y_pred) + (1 - y) * np.log10(1 - y_pred)) / np.size(y)
+    y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
+    return -np.mean(np.sum(y * np.log10(y_pred) + (1 - y) * np.log10(1 - y_pred), axis = 1))
+
+def cross_entropy_grad(y, y_pred):
+    y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
+    return (y / y_pred) - (1 - y) / (1 - y_pred) / y.shape[0]
 
 # For multiclass classification (y_pred has to be the probabilities of the given class and y must be the true labels)
 def categorical_cross_entropy(y, y_pred):
-    y_pred = np.clip(y_pred, epsilon, 1 - (epsilon)) # Prevents y_pred from being 0
-    return -np.sum(y * np.log10(y_pred), axis = 1) / np.size(y) # Axis specifies the column in which the class and probabilities would be in
+    y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
+    return -np.mean(np.sum(y * np.log(y_pred), axis=1))
+
+def categorical_cross_entropy_grad(y, y_pred):
+    y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
+    return (y_pred - y) / y.shape[0]
 
 # For binary classification
 def hinge(y, y_pred):
@@ -56,6 +63,6 @@ def hinge(y, y_pred):
 
 # P and Q must be probability distributions
 def kl_divergence(P, Q):
-    P = np.clip(P, epsilon, 1) # Ensure non-zero values
-    Q = np.clip(Q, epsilon, 1)    
+    P = np.clip(P, 1e-15, 1) # Ensure non-zero values
+    Q = np.clip(Q, 1e-15, 1)    
     return np.sum(P * np.log10(P / Q))

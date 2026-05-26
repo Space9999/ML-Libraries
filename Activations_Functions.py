@@ -17,14 +17,10 @@ def tanh_grad(output):
     return 1 - np.power(tanh(output), 2)
 
 def relu(output):
-    if (output < 0):
-        return 0
-    return output
+    return np.where(output >= 0, output, 0)
 
 def relu_grad(output):
-    if (output < 0):
-        return 0
-    return 1
+    return np.where(output >= 0, 1, 0)
 
 def leaky_relu(output, alpha = 0.01):
     if (output < 0):
@@ -50,3 +46,11 @@ def selu(output, alpha, gamma):
 
 def soft_plus(output):
     return math.log10(1 + math.exp(output))
+
+def softmax(output):
+    e_x = np.exp(output - np.max(output, axis = -1, keepdims = True))
+    return e_x / np.sum(e_x, axis = -1, keepdims = True)
+
+def softmax_grad(grad_output, softmax_output):
+    inner = np.sum(grad_output * softmax_output, axis=-1, keepdims=True)
+    return softmax_output * (grad_output - inner)
