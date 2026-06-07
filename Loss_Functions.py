@@ -1,13 +1,13 @@
 import numpy as np
 
 def mse(y, y_pred):
-    return np.sum((y - y_pred) ** 2) / np.size(y)
+    return np.sum((y_pred - y) ** 2) / np.size(y)
 
 def mse_grad(y, y_pred):
-    return np.sum(2 * (y - y_pred)) / np.size(y)
+    return np.sum(2 * (y_pred - y)) / np.size(y)
 
 def mae(y, y_pred):
-    return np.sum(abs(y - y_pred)) / np.size(y)
+    return np.sum(abs(y_pred - y)) / np.size(y)
 
 def mae_grad(y, y_pred):
     mae = mae(y, y_pred)
@@ -18,7 +18,7 @@ def mae_grad(y, y_pred):
     return 0
 
 def mbe(y, y_pred):
-    return np.sum(y - y_pred) / np.size(y)
+    return np.sum(y_pred - y) / np.size(y)
 
 def mbe_grad():
     return 1
