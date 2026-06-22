@@ -197,6 +197,77 @@ class Activation(Layer):
     def get_output_shape(self):
         return self.input_shape
 
+# 2D Convolution Layer
+class Conv2D(Layer):
+
+    def __init__(self, name):
+        self.activation_function = activation_functions[name]
+        self.activation_name = name
+        self.Trainable = True
+    
+    def get_layer_name(self):
+        return "(%s) Activation" % (self.activation_name)
+    
+    def parameters(self):
+        return np.prod(self.weight.shape) + np.prod(self.weight_bias.shape)
+    
+# Helper methods for convolution
+# Equations are referenced from CS231n Stanford (https://cs231n.github.io/convolutional-networks/)
+def determine_padding(filter_shape, padding_type = "same"):
+
+    if padding_type == "no_padding":
+        return (0, 0), (0, 0)
+    
+    # Pad such that output shape is equal to the input shape
+    # Determined by the following equation
+    # output_height = ((input_height + pad_h - filter_height) / stride) + 1 where output_height = input_height and stride = 1
+    # Note: The above equation works for width as well
+    elif padding_type == "same":
+        filter_height, filter_width = filter_shape
+
+        # For ideal results, height1 = height2 and vice versa for width
+        pad_height1 = int(math.floor((filter_height - 1) / 2))
+        pad_height2 = int(math.ceil((filter_height - 1) / 2))
+        pad_width1 = int(math.floor((filter_width - 1) / 2))
+        pad_width2 = int(math.ceil((filter_width - 1) / 2))
+
+    return (pad_height1, pad_height2), (pad_width1, pad_width2)
+
+def get_im2col_indices(images_shape, filter_shape, padding, stride = 1):
+    batch_size, channels, height, width = images_shape
+    filter_height, filter_width = filter_shape
+    pad_height, pad_width = padding
+
+    # Uses equation referenced in im2col indices
+    output_height = int((height + np.sum(pad_height) - filter_height) / stride + 1)
+    output_width = int((width + np.sum(pad_width) - filter_width) / stride + 1)
+
+    # Generates indices for corresponding components
+    # i -> row indices
+    # j -> column indices
+    # k -> channel indices
+    # Allows for quick lookup of elements of a certain convolution patch
+    i1 = np.repeat(np.arange(filter_height), filter_width)
+    i1 = np.tile(i1, channels)
+    i2 = stride * np.repeat(np.arange(output_height), output_width)
+    j1 = np.tile(np.arange(filter_width), filter_height * channels)
+    j2 = stride * np.tile(np.arange(output_width), output_height)
+    i = i1.reshape(-1, 1) + i2.reshape(-1, 1)
+    j = j1.reshape(-1, 1) + j2.reshape(-1, 1)
+
+    k = np.repeat(np.arange(channels), filter_height * filter_width).reshape(-1, 1)
+
+    return (k, i, j)
+
+# Used in forward pass
+# Converts image data into column shape
+def image_to_column(images, filter_shape, stride, padding_type = "same"):
+    filter_height, filter_width = filter_shape
+
+    pad_height, pad_width = determine_padding(filter_shape, padding_type)
+
+    images_padded = np.pad(images, ((0, 0), (0, 0), pad_height, pad_width), mode = "constant")
+        
 
 
         
