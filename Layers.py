@@ -262,11 +262,42 @@ def get_im2col_indices(images_shape, filter_shape, padding, stride = 1):
 # Used in forward pass
 # Converts image data into column shape
 def image_to_column(images, filter_shape, stride, padding_type = "same"):
-    filter_height, filter_width = filter_shape
-
     pad_height, pad_width = determine_padding(filter_shape, padding_type)
 
     images_padded = np.pad(images, ((0, 0), (0, 0), pad_height, pad_width), mode = "constant")
+
+    k, i, j = get_im2col_indices(images.shape, filter_shape, (pad_height, pad_width), stride)
+
+    # Create columns that contain each convolution window and transpose them for quick computation (GeMM)
+    # Reference: https://spatial-lang.org/gemm/
+
+    cols = images_padded[:, k, i, j]
+    channels = images.shape[1]
+
+    # A transport argument of -1 means that the row or column is automatically assigned based on original shape
+    # i.e rows = size / columns and vice versa
+    cols = cols.transpose(1, 2, 0).reshape(np.prod(filter_shape) * channels, -1)
+    return cols
+
+# Used in backward pass
+# Converts column shaped input into image shape
+# Note: This is not intended to recreate the original image data, but serve as the adjoint operation to image_to_column
+# I.e this only serves as the backward operation in terms of backpropagation
+def column_to_image(cols, images_shape, filter_shape, stride, padding_type = "same"):
+    batch_size, channels, height, width = images_shape
+    pad_height, pad_width = determine_padding(filter_shape, padding_type)
+
+    images_padded = np.zeros((batch_size, channels, np.sum(pad_height) + height, np.sum(pad_width) + width))
+
+    k, i, j = get_im2col_indices(images_shape, filter_shape, (pad_height, pad_width), stride)
+
+    cols = cols.reshape(channels * np.prod(filter_shape), -1, batch_size)
+    cols = cols.transpose(2, 0, 1)
+
+    # This will sum up overlapping pixels in the convolution columns as their gradient contributions to each convolution patch would sum up
+    np.add.at(images_padded, (slice(None), k, i, j), cols)
+
+    return images_padded[:, :, pad_height[0] : height + pad_height[0], pad_width[0] : width + pad_width[0]]
         
 
 
