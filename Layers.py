@@ -98,9 +98,10 @@ class RNN(Layer):
 
     """Bp_time_steps stands for backpropagation time steps meaning the amount of time steps
     the gradient will be propagated for depending on the gradient"""
-    def __init__(self, n_units, activation_gradient = 'tanh_gradient', bp_time_steps = 5, input_shape = None):
+    def __init__(self, n_units, activation = 'tanh', activation_gradient = 'tanh_gradient', bp_time_steps = 5, input_shape = None):
         self.input_shape = input_shape
         self.n_units = n_units
+        self.activation = activation_functions[activation]()
         self.activation_gradient = activation_gradients[activation_gradient]()
         self.trainable = True
         self.bp_time_steps = bp_time_steps
@@ -174,42 +175,80 @@ class RNN(Layer):
     def get_output_shape(self):
         return self.input_shape
 
-class Activation(Layer):
-
-    def __init__(self, name):
-        self.activation_function = activation_functions[name]
-        self.activation_name = name
-        self.trainable = True   
-    
-    def get_layer_name(self):
-        return "(%s) Activation" % (self.activation_name)
-    
-    def forward_pass(self, X, trainable = True):
-        self.layer_input = X
-        return self.activation_function(X)
-    
-    def backward_pass(self, accumulated_grad):
-        if self.activation_name == 'softmax': # Edge case for softmax function to use full jacobian matrix
-            softmax_output = self.activation_function(self.layer_input)
-            return activation_gradients['softmax_gradient'](accumulated_grad, softmax_output)
-        return accumulated_grad * activation_gradients[self.activation_name + '_gradient'](self.layer_input)
-    
-    def get_output_shape(self):
-        return self.input_shape
-
 # 2D Convolution Layer
 class Conv2D(Layer):
 
-    def __init__(self, name):
+    def __init__(self, name, filters, filter_shape, input_shape, padding_type = "same", stride = 1):
         self.activation_function = activation_functions[name]
         self.activation_name = name
-        self.Trainable = True
+        self.filters = filters
+        self.filter_shape = filter_shape
+        self.input_shape = input_shape
+        self.padding_type = padding_type
+        self.stride = stride
+        self.trainable = True
     
     def get_layer_name(self):
         return "(%s) Activation" % (self.activation_name)
     
+    def initialize(self, optimizer):
+        filter_height, filter_width = self.filter_shape
+        channels = self.input_shape[0]
+
+        limit = 1 / math.sqrt(math.prod(self.filter_shape))
+        self.weight = np.random.uniform(-limit, limit, size = (self.filters, channels, filter_height, filter_width))
+        self.weight_bias = np.zeros((self.filters, 1))
+
+        self.weight_optimizer = copy.copy(optimizer)
+        self.weight_bias_optimizer = copy.copy(optimizer)
+    
     def parameters(self):
         return np.prod(self.weight.shape) + np.prod(self.weight_bias.shape)
+    
+    # Logic for forward and backward pass is similiar to that of Dense layer
+    def forward_pass(self, X, training = True):
+        batch_size, channels, height, width = X.shape
+        self.layer_input = X
+
+        # Turn image shape into column shape and vice versa for weights
+        self.X_col = image_to_column(X, self.filter_shape, self.stride, self.padding_type)
+
+        # Convert weight to column shape
+        self.weight_col = self.weight.reshape((self.filters, -1))
+
+        output = self.weight_col.dot(self.X_col) + self.weight_bias
+        output = output.reshape(self.get_output_shape() + (batch_size, ))
+
+        # Make batch_size come first
+        return output.transpose(3, 0, 1, 2)
+    
+    def backward_pass(self, accum_grad):
+        # Convert gradient into column shape
+        accum_grad = accum_grad.transpose(1, 2, 3, 0).reshape((self.filters, -1))
+
+        if self.trainable:
+            grad_weight = accum_grad.dot(self.X_col.T).reshape(self.weight.shape)
+            grad_weight_bias = np.sum(accum_grad, axis = 1, keepdims = True)
+
+            self.weight = self.weight_optimizer.update(self.weight, grad_weight)
+            self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
+
+        accum_grad = self.weight_col.T.dot(accum_grad)
+        accum_grad = column_to_image(accum_grad, self.layer_input.shape, self.filter_shape, 
+                                     stride = self.stride, 
+                                     padding_type = self.padding_type)
+        
+        return accum_grad
+        
+
+    def get_output_shape(self):
+        channels, height, width = self.input_shape
+        pad_height, pad_width = determine_padding(self.filter_shape, self.padding_type)
+
+        output_height = int((height + np.sum(pad_height) - self.filter_shape[0]) / self.stride + 1)
+        output_width = int((width + np.sum(pad_width) - self.filter_shape[1]) / self.stride + 1)
+
+        return self.filters, output_height, output_width
     
 # Helper methods for convolution
 # Equations are referenced from CS231n Stanford (https://cs231n.github.io/convolutional-networks/)
@@ -238,7 +277,7 @@ def get_im2col_indices(images_shape, filter_shape, padding, stride = 1):
     filter_height, filter_width = filter_shape
     pad_height, pad_width = padding
 
-    # Uses equation referenced in im2col indices
+    # Uses equation referenced in padding function
     output_height = int((height + np.sum(pad_height) - filter_height) / stride + 1)
     output_width = int((width + np.sum(pad_width) - filter_width) / stride + 1)
 
@@ -299,7 +338,72 @@ def column_to_image(cols, images_shape, filter_shape, stride, padding_type = "sa
 
     return images_padded[:, :, pad_height[0] : height + pad_height[0], pad_width[0] : width + pad_width[0]]
         
+# Layer with only activation functions
+class Activation(Layer):
 
+    def __init__(self, name):
+        self.activation_function = activation_functions[name]
+        self.activation_name = name
+        self.trainable = True   
+    
+    def get_layer_name(self):
+        return "(%s) Activation" % (self.activation_name)
+    
+    def forward_pass(self, X, training = True):
+        self.layer_input = X
+        return self.activation_function(X)
+    
+    def backward_pass(self, accumulated_grad):
+        if self.activation_name == 'softmax': # Edge case for softmax function to use full jacobian matrix
+            softmax_output = self.activation_function(self.layer_input)
+            return activation_gradients['softmax_gradient'](accumulated_grad, softmax_output)
+        return accumulated_grad * activation_gradients[self.activation_name + '_gradient'](self.layer_input)
+    
+    def get_output_shape(self):
+        return self.input_shape
+
+# Layer that sets a certain percentage of previous output values to 0
+class Dropout(Layer):
+    
+    def __init__(self, probability = 0.2):
+        self.probability = probability
+        self.mask = None
+        self.input_shape = None
+        self.n_units = None
+        self.pass_through = True
+        self.trainable = True
+
+    # We want to keep the expected value of neurons if not training as the weights were adjusted with the dropout in mind
+    def forward_pass(self, X, training = True):
+        temp_mask = (1 - self.probability)
+        if training:
+            self.mask = np.random.uniform(size = X.shape) > self.probability
+            temp_mask = self.mask
+        return temp_mask * X
+    
+    def backward_pass(self, accum_grad):
+        return accum_grad * self.mask
+    
+    def get_output_shape(self):
+        return self.input_shape
+
+class BatchNormalization(Layer):
+
+    def __init__(self, momentum = 0.99):
+        self.momentum = momentum
+        self.trainable = True
+        self.epsilon = 0.01
+        self.running_mean = None
+        self.running_var = None
+
+    def initialize(self, optimizer):
+        self.gamma = np.ones(self.input_shape)
+        self.beta = np.zeros(self.input_shape)
+        self.gamma_optimizer = copy.copy(optimizer)
+        self.beta_optimizer = copy.copy(optimizer)
+    
+    def parameters(self):
+        return np.prod(self.gamma.shape) + np.prod(self.beta.shape)
 
         
 
