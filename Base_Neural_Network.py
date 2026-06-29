@@ -9,6 +9,7 @@ class Base_Neural_Network():
         self.errors = {"training": [], "validation": []}
         self.loss_function = loss
         self.loss_gradient = loss_grad
+        self.parameters = 0
 
         self.val_set = None
         if validation_data:
@@ -21,7 +22,6 @@ class Base_Neural_Network():
             layer.trainable = trainable
 
     def add(self, layer):
-        
         # If the layer added is not the 1st one, then set the shape of the input to that of the output of last layer added
         if self.layers:
             layer.set_input_shape(self.layers[-1].get_output_shape())
@@ -30,6 +30,7 @@ class Base_Neural_Network():
         if hasattr(layer, 'initialize_layer'):
             layer.initialize_layer(optimizer = self.optimizer)
         
+        self.parameters += layer.parameters()
         self.layers.append(layer)
 
     def test_batch(self, X, y):
@@ -69,6 +70,9 @@ class Base_Neural_Network():
         for layer in self.layers:
             layer_output = layer.forward_pass(layer_output, training)
         return layer_output
+    
+    def get_parameters(self):
+        return self.parameters
     
     def backward_pass(self, loss_grad):
         for layer in reversed(self.layers):
