@@ -48,7 +48,7 @@ def cross_entropy_grad(y, y_pred):
 # For multiclass classification (y_pred has to be the probabilities of the given class and y must be the true labels)
 def categorical_cross_entropy(y, y_pred):
     y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)
-    return -np.mean(np.sum(y * np.log(y_pred), axis=1))
+    return -np.mean(np.sum(y * np.log(y_pred), axis = 1))
 
 def categorical_cross_entropy_grad(y, y_pred):
     y_pred = np.clip(y_pred, 1e-15, 1 - 1e-15)

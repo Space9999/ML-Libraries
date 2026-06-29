@@ -125,7 +125,7 @@ class Simulated_Annealing:
 # Simplified version of SGD with momentum for the purposes of implementation in layers
 # Note: We are optimizing for min weight because the loss function must have a positive direct relationship with weight 
 # Loss = error(w, other variables)
-class Simplified_SGD:
+class Simplified_SGD():
     def __init__(self, learning_rate = 0.01, momentum = 0):
         self.learning_rate = learning_rate
         self.momentum = momentum
