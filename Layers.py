@@ -404,6 +404,57 @@ class BatchNormalization(Layer):
     
     def parameters(self):
         return np.prod(self.gamma.shape) + np.prod(self.beta.shape)
+    
+    def forward_pass(self, X, training = True):
+        # Initialize mean on first run
+        if self.running_mean is None:
+            self.running_mean = np.mean(X, axis = 0)
+            self.running_var = np.var(X, axis = 0)
+        
+        if training and self.trainable:
+            mean = np.mean(X, axis = 0)
+            var = np.var(X, axis = 0)
+            # Exponential running mean and variance
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
+        
+        else:
+            mean = self.running_mean
+            var = self.running_var
+        
+        # For backward pass
+        self.X_centered = X - mean
+        self.inverse_standard_deviation = 1 / math.sqrt(var + self.epsilon)
+
+        X_normalized = self.X_centered * self.inverse_standard_deviation
+        output = self.gamma * X_normalized + self.beta
+
+        return output
+
+    def backward_pass(self, accum_grad):
+        # Save values from forward pass
+        gamma = self.gamma
+
+        if self.trainable:
+            X_normalized = self.X_centered * self.inverse_standard_deviation
+            grad_gamma = np.sum(accum_grad * X_normalized, axis = 0)
+            grad_beta = np.sum(accum_grad, axis = 0)
+
+            self.gamma = self.gamma_optimizer.update(self.gamma, grad_gamma)
+            self.beta = self.beta_optimizer.update(self.beta, grad_beta)
+        
+        batch_size = accum_grad.shape[0]
+
+        # The gradient of loss with respect to layer inputs
+        accum_grad = (1 / batch_size) * gamma * self.inverse_standard_deviation * (batch_size * accum_grad - 
+                                                                                   np.sum(accum_grad, axis = 0)
+                                                                                   - self.X_centered * self.inverse_standard_deviation ** 2
+                                                                                   * np.sum(accum_grad * self.X_centered, axis = 0))
+        
+        return accum_grad
+    
+    def get_output_shape(self):
+        return self.input_shape
 
         
 
