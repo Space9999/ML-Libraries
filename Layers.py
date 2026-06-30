@@ -48,7 +48,7 @@ class Layer(object):
 class Dense(Layer):
 
     def __init__(self, n_units, input_shape = None):
-        self.input_shape = input_shape # Note: input_shape is a single digit specifying the number of items in a input for dense layers 
+        self.input_shape = input_shape # Note: input_shape is a single digit specifying the number of neurons
         self.n_units = n_units
         self.layer_input = None
         self.trainable = True
@@ -96,8 +96,7 @@ class Dense(Layer):
 # Recurrent neural network layer
 class RNN(Layer):
 
-    """Bp_time_steps stands for backpropagation time steps meaning the amount of time steps
-    the gradient will be propagated for depending on the gradient"""
+    """Bp_time_steps stands for backpropagation time steps"""
     def __init__(self, n_units, activation = 'tanh', activation_gradient = 'tanh_gradient', bp_time_steps = 5, input_shape = None):
         self.input_shape = input_shape
         self.n_units = n_units
@@ -178,9 +177,7 @@ class RNN(Layer):
 # 2D Convolution Layer
 class Conv2D(Layer):
 
-    def __init__(self, name, filters, filter_shape, input_shape, padding_type = "same", stride = 1):
-        self.activation_function = activation_functions[name]
-        self.activation_name = name
+    def __init__(self, filters, filter_shape, input_shape = None, padding_type = "same", stride = 1):
         self.filters = filters
         self.filter_shape = filter_shape
         self.input_shape = input_shape
@@ -188,10 +185,7 @@ class Conv2D(Layer):
         self.stride = stride
         self.trainable = True
     
-    def get_layer_name(self):
-        return "(%s) Activation" % (self.activation_name)
-    
-    def initialize(self, optimizer):
+    def initialize_layer(self, optimizer):
         filter_height, filter_width = self.filter_shape
         channels = self.input_shape[0]
 
@@ -321,7 +315,7 @@ def image_to_column(images, filter_shape, stride, padding_type = "same"):
 # Used in backward pass
 # Converts column shaped input into image shape
 # Note: This is not intended to recreate the original image data, but serve as the adjoint operation to image_to_column
-# I.e this only serves as the backward operation in terms of backpropagation
+# i.e this only serves as the backward operation in terms of backpropagation
 def column_to_image(cols, images_shape, filter_shape, stride, padding_type = "same"):
     batch_size, channels, height, width = images_shape
     pad_height, pad_width = determine_padding(filter_shape, padding_type)
@@ -387,6 +381,7 @@ class Dropout(Layer):
     def get_output_shape(self):
         return self.input_shape
 
+# Normalizes activation output for a specific feature (rather than a specific sample as with layer normalization)
 class BatchNormalization(Layer):
 
     def __init__(self, momentum = 0.99):
@@ -396,7 +391,7 @@ class BatchNormalization(Layer):
         self.running_mean = None
         self.running_var = None
 
-    def initialize(self, optimizer):
+    def initialize_layer(self, optimizer):
         self.gamma = np.ones(self.input_shape)
         self.beta = np.zeros(self.input_shape)
         self.gamma_optimizer = copy.copy(optimizer)
@@ -455,6 +450,25 @@ class BatchNormalization(Layer):
     
     def get_output_shape(self):
         return self.input_shape
+
+# Flattens multidimesional matrix into 2-D matrix
+class Flatten(Layer):
+    
+    def __init__(self, input_shape = None):
+        self.previous_shape = None
+        self.trainable = True
+        self.input_shape = input_shape
+    
+    def forward_pass(self, X, training = True):
+        self.previous_shape = X.shape
+        return X.reshape((X.shape[0], -1))
+    
+    def backward_pass(self, accum_grad):
+        return accum_grad.reshape(self.previous_shape)
+    
+    # Note: This is the output shape of one specific sample (the -1 dimesion is the sample dimesion in the forward pass)
+    def get_output_shape(self):
+        return (np.prod(self.input_shape),)
 
         
 

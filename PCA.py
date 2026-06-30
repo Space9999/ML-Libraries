@@ -1,12 +1,12 @@
 import numpy as np
-import Data_Functions as data_func
+from Data_Functions import Data_Functions
 
 # Principal Component Analysis
 # Method for reducing dimensionality of given feature space and maximizing variance on each feature axis
 class PCA():
     def transform(X, n_components):
         X_centered = X - np.mean(X, axis=0)
-        covariance_matrix = data_func.Data_Functions.calculate_covariance_matrix(X_centered)
+        covariance_matrix = Data_Functions.calculate_covariance_matrix(X_centered)
 
         eigenvalues, eigenvectors = np.linalg.eig(covariance_matrix)
 
