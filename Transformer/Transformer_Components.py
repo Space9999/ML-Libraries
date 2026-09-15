@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import copy
-from utils.Layers import DenseMultiDim, Dense, Activation, Dropout, LayerNormalization
+from utils.Layers import Dense, Activation, Dropout, LayerNormalization
 import utils.Activations_Functions as Activations_Functions
 import utils.Base_Neural_Network as NN
 import utils.Optimizers as Optimizers
@@ -21,16 +21,16 @@ class MultiHeadAttention():
         self.isSelfAttention = False
 
         # The 3 comes from the concatenation of the query, key, and value matrices
-        self.qkv_projection = DenseMultiDim(input_size = hidden_dim, n_units = 3 * num_heads * self.qkv_dim, have_bias = False)
+        self.qkv_projection = Dense(input_size = hidden_dim, n_units = 3 * num_heads * self.qkv_dim, have_bias = False)
         self.qkv_projection.initialize_layer(optimizer)
 
         # For cross attention only
-        self.query_projection = DenseMultiDim(input_size = hidden_dim, n_units = num_heads * self.qkv_dim, have_bias = False)
+        self.query_projection = Dense(input_size = hidden_dim, n_units = num_heads * self.qkv_dim, have_bias = False)
         self.query_projection.initialize_layer(optimizer)
-        self.key_value_projection = DenseMultiDim(input_size = hidden_dim, n_units = 2 * num_heads * self.qkv_dim, have_bias = False)
+        self.key_value_projection = Dense(input_size = hidden_dim, n_units = 2 * num_heads * self.qkv_dim, have_bias = False)
         self.key_value_projection.initialize_layer(optimizer)
 
-        self.output_projection = DenseMultiDim(input_size = hidden_dim, n_units = num_heads * self.qkv_dim, have_bias = False)
+        self.output_projection = Dense(input_size = hidden_dim, n_units = num_heads * self.qkv_dim, have_bias = False)
         self.output_projection.initialize_layer(optimizer)
 
     def self_attention_projection(self, input):
@@ -169,9 +169,9 @@ class EncoderBlock():
         self.mha = MultiHeadAttention(hidden_dim, num_heads)
 
         self.feedforward = NN.Base_Neural_Network(optimizer = optimizer)
-        self.feedforward.add(DenseMultiDim(input_size = hidden_dim, n_units = feedforward_dim))
+        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim))
         self.feedforward.add(Activation("relu"))
-        self.feedforward.add(DenseMultiDim(input_size = feedforward_dim, n_units = hidden_dim))
+        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim))
 
         self.dropout1 = Dropout(dropout_probability)
         self.dropout2 = Dropout(dropout_probability)
@@ -216,9 +216,9 @@ class DecoderBlock():
         self.self_mha = MultiHeadAttention(hidden_dim, num_heads)
 
         self.feedforward = NN.Base_Neural_Network(optimizer = optimizer)
-        self.feedforward.add(DenseMultiDim(input_size = hidden_dim, n_units = feedforward_dim))
+        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim))
         self.feedforward.add(Activation("relu"))
-        self.feedforward.add(DenseMultiDim(input_size = feedforward_dim, n_units = hidden_dim))
+        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim))
 
         self.dropout1 = Dropout(dropout_probability)
         self.dropout2 = Dropout(dropout_probability)
@@ -313,7 +313,7 @@ class Decoder():
         for _ in range(num_blocks):
             self.decoder_blocks.append(DecoderBlock(hidden_dim, feedforward_dim, num_heads, dropout_probability))
 
-        self.output_layer = DenseMultiDim(vocab_size, hidden_dim, have_bias = False)
+        self.output_layer = Dense(vocab_size, hidden_dim, have_bias = False)
         self.output_layer.initialize_layer(optimizer)
             
     def forward_pass(self, input_tokens, encoder_hidden_states, source_padding_mask, future_mask):
