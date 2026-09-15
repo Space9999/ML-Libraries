@@ -32,7 +32,7 @@ n_samples, n_features = np.shape(X)
 X_train, X_test, y_train, y_test = Data_Functions.train_test_split(X, y, test_size = 0.5)
 
 mlp = Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
-mlp.add(Dense(input_shape = (n_features, ), n_units = 64))
+mlp.add(Dense(input_size = n_features, n_units = 64))
 mlp.add(Activation('relu'))
 mlp.add(Dense(n_units = 64))
 mlp.add(Activation('relu'))

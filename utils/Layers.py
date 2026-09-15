@@ -48,8 +48,8 @@ class Layer(object):
 # A fully connected neural network layer (equivalent with linear layer since there is no activation)
 class Dense(Layer):
 
-    def __init__(self, n_units, input_shape = None, have_bias = True):
-        self.input_shape = input_shape
+    def __init__(self, n_units, input_size = None, have_bias = True):
+        self.input_shape = (input_size, )
         self.n_units = n_units # Number of neurons
         self.layer_input = None
         self.trainable = True
@@ -77,35 +77,78 @@ class Dense(Layer):
     def forward_pass(self, input, training = True):
         self.layer_input = input
         if self.have_bias:
-            return input.dot(self.weight) + self.weight_bias
-        return input.dot(self.weight)
+            return input @ self.weight + self.weight_bias
+        return input @ self.weight
     
     def backward_pass(self, accumulated_gradient):
         # Save weight from forward pass
         prev_weight = self.weight
 
         if self.trainable:
-            grad_weight = self.layer_input.T.dot(accumulated_gradient)
+            input_2d = self.layer_input.reshape(-1, self.layer_input.shape[-1])
+            gradient_2d = accumulated_gradient.reshape(-1, accumulated_gradient.shape[-1])
+            grad_weight = input_2d.T @ gradient_2d
             self.weight = self.weight_optimizer.update(self.weight, grad_weight)
             
             """The weight bias is calculated through the sum of gradient vector components 
                 as each portion of weight gradient will contribute to a change in bias"""
             if self.have_bias:
-                grad_weight_bias = np.sum(accumulated_gradient, axis = 0, keepdims = True)
+                axes = tuple(range(accumulated_gradient.ndim - 1))
+                grad_weight_bias = np.sum(accumulated_gradient, axis = axes, keepdims = False).reshape(1, self.n_units)
                 self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
         
-        accumulated_gradient = accumulated_gradient.dot(prev_weight.T)
+        accumulated_gradient = accumulated_gradient @ prev_weight.T
         return accumulated_gradient
 
-    # For embedding layer
+    def get_output_shape(self):
+        if (self.layer_input is None):
+            return (self.n_units, )
+        return self.layer_input.shape[:-1] + (self.n_units, )
+
+# Learned embedding lookup table
+class Embedding(Layer):
+
+    def __init__(self, vocab_size, embedding_dim):
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.layer_input = None
+        self.trainable = True
+        self.weight = None
+        self.padding_index = None
+    
+    def initialize_layer(self, optimizer):
+        limit = 1 / np.sqrt(self.embedding_dim)
+
+        self.weight = np.random.uniform(-limit, limit, (self.vocab_size, self.embedding_dim))
+        self.weight_optimizer = copy.copy(optimizer)
+
+    def parameters(self):
+        return np.prod(self.weight.shape)
+    
+    def forward_pass(self, input, training = True):
+        self.layer_input = input
+        return self.weight[input]
+    
+    def backward_pass(self, accumulated_gradient):
+        if self.trainable:
+            grad_weight = np.zeros_like(self.weight)
+            np.add.at(
+                grad_weight,
+                self.layer_input,
+                accumulated_gradient
+            )
+            if (self.padding_index is not None):
+                grad_weight[self.padding_index] = 0
+            self.weight = self.weight_optimizer.update(self.weight, grad_weight)
+
+        # No meaningful gradient with respect to tokens
+        return None
+    
     def get_weight(self): 
         return self.weight
 
-    def set_weight(self, weight):
-        self.weight = weight
-
-    def get_output_shape(self):
-        return (self.n_units, )
+    def set_padding_index(self, padding_index):
+        self.padding_index = padding_index
 
 # Recurrent neural network layer with truncated backpropagation
 class RNN(Layer):
@@ -660,11 +703,12 @@ class BatchNormalization(Layer):
 # Like batch normalization but for a sample
 class LayerNormalization(Layer):
 
-    def __init__(self):
+    def __init__(self, input_size = None):
         self.trainable = True
         self.epsilon = 0.01
         self.prev_mean = None
         self.prev_var = None
+        self.input_shape = (input_size, )
 
     def initialize_layer(self, optimizer):
         self.gamma = np.ones(self.input_shape)
@@ -677,18 +721,17 @@ class LayerNormalization(Layer):
 
     def forward_pass(self, X, training = True):
         if training and self.trainable:
-            mean = np.mean(X, axis = 1, keepdims = True)
-            var = np.var(X, axis = 1, keepdims = True)
+            mean = np.mean(X, axis = -1, keepdims = True)
+            var = np.var(X, axis = -1, keepdims = True)
             self.prev_mean = mean
             self.prev_var = var
         else:
             mean = self.prev_mean
             var = self.prev_var
-            batch_size = X.shape[0]
-            # Mean and variance have same shape
-            prev_shape = (mean.shape[1], mean.shape[2]) 
-            mean.resize((batch_size, prev_shape[0], prev_shape[1]), refcheck = False)
-            var.resize((batch_size, prev_shape[0], prev_shape[1]), refcheck = False)
+            # Ensures that mean and variance are broadcastable to X
+            if mean is not None and X.shape[-1] == mean.shape[-1]:
+                mean = np.broadcast_to(mean, X.shape)
+                var = np.broadcast_to(var, X.shape) 
             
         # For backward pass
         self.X_centered = X - mean
@@ -706,19 +749,21 @@ class LayerNormalization(Layer):
         # Update weights if trainable
         if self.trainable:
             X_normalized = self.X_centered * self.inverse_standard_deviation
-            grad_gamma = np.sum(accum_grad * X_normalized, axis = 0)
-            grad_beta = np.sum(accum_grad, axis = 0)
+            reduction_axes = tuple(range(accum_grad.ndim - 1))
+            grad_gamma = np.sum(accum_grad * X_normalized, axis = reduction_axes)
+            grad_beta = np.sum(accum_grad, axis = reduction_axes)
 
             self.gamma = self.gamma_optimizer.update(self.gamma, grad_gamma)
             self.beta = self.beta_optimizer.update(self.beta, grad_beta)
         
-        feature_length = accum_grad.shape[1]
+        feature_length = accum_grad.shape[-1]
+
+        grad_normalized = accum_grad * prev_gamma
 
         # The gradient of loss with respect to layer inputs
-        accum_grad = (1 / feature_length) * (prev_gamma * self.inverse_standard_deviation * feature_length * accum_grad - 
-                                            np.sum(accum_grad, axis = 1, keepdims = True) - self.X_centered * 
-                                            self.inverse_standard_deviation ** 2 * 
-                                            np.sum(accum_grad * self.X_centered, axis = 1, keepdims = True))
+        accum_grad = ((self.inverse_standard_deviation / feature_length) * (feature_length * grad_normalized - 
+                     np.sum(grad_normalized, axis = -1, keepdims = True) - (self.X_centered * self.inverse_standard_deviation ** 2
+                     * np.sum(grad_normalized * self.X_centered, axis = -1, keepdims = True))))
         
         return accum_grad
 
@@ -727,11 +772,12 @@ class LayerNormalization(Layer):
 
 # Flattens multidimesional matrix into 2-D matrix
 class Flatten(Layer):
-    
-    def __init__(self, input_shape = None):
+
+    # Input shape of only one batch/sample (i.e no batch dimension)
+    def __init__(self, batch_input_shape = None):
         self.previous_shape = None
         self.trainable = True
-        self.input_shape = input_shape
+        self.input_shape = batch_input_shape
     
     def forward_pass(self, X, training = True):
         self.previous_shape = X.shape
