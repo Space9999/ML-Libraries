@@ -77,6 +77,7 @@ class Base_Neural_Network():
     def backward_pass(self, loss_grad):
         for layer in reversed(self.layers):
             loss_grad = layer.backward_pass(loss_grad)
+        return loss_grad
     
     def predict(self, X):
         return self.forward_pass(X, training = False)

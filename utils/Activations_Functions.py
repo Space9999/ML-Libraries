@@ -47,8 +47,12 @@ def soft_plus(output):
     return np.log10(1 + np.exp(output))
 
 def softmax(output):
-    e_x = np.exp(output - np.max(output, axis = -1, keepdims = True))
-    return e_x / np.sum(e_x, axis = -1, keepdims = True)
+    max_value = np.max(output, axis = -1, keepdims = True)
+    max_value[max_value == float("-inf")] = 0
+    e_x = np.exp(output - max_value)
+    divisor = np.sum(e_x, axis = -1, keepdims = True)
+    divisor[divisor == 0] = 1e-15 # Some small value to prevent 0/0
+    return e_x / divisor
 
 def softmax_grad(grad_output, softmax_output):
     inner = np.sum(grad_output * softmax_output, axis = -1, keepdims=True)
