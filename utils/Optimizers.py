@@ -1,11 +1,16 @@
 import numpy as np
 
-# Simplified version of SGD with momentum for the purposes of implementation in layers
 class Simplified_SGD():
-    def __init__(self, learning_rate = 0.01, momentum = 0):
+    def __init__(self, learning_rate = 0.01, momentum = 0, warmup = None,
+                 factor = None, model_size = None, dynamic_lr = False):
         self.learning_rate = learning_rate
         self.momentum = momentum
         self.weight_update = None
+
+        self.dynamic_lr = dynamic_lr
+        self.warmup = warmup
+        self.factor = factor
+        self.model_size = model_size
 
     def update(self, weight, gradient_weight):
         if self.weight_update is None:
@@ -13,17 +18,34 @@ class Simplified_SGD():
 
         self.weight_update = self.momentum + self.weight_update + (1 - self.momentum) * gradient_weight
 
-        return weight - self.learning_rate * self.weight_update
+        if (self.dynamic_lr):
+            self.step()
 
+        return weight - self.learning_rate * self.weight_update
+    
+    # Learning rate scheduler methods
+    def get_learning_rate(self):
+        return self.factor * (self.model_size ** (-0.5)) * min(self.t ** (-0.5), 
+                                                                  self.t * self.warmup ** (-1.5))
+    def step(self):
+        self.learning_rate = self.get_learning_rate() 
+
+# Includes noam optimizer wrapper methods
 class Adam():
-    def __init__(self, learning_rate = 0.001, b1 = 0.9, b2 = 0.999):
+    def __init__(self, learning_rate = 0.001, b1 = 0.9, b2 = 0.999, warmup = None,
+                 factor = None, model_size = None, dynamic_lr = False):
         self.learning_rate = learning_rate
         self.epsilon = 1e-8
-        self.t = 0
+        self.t = 1
         self.m = None
         self.v = None
         self.b1 = b1
         self.b2 = b2
+
+        self.dynamic_lr = dynamic_lr
+        self.warmup = warmup
+        self.factor = factor
+        self.model_size = model_size
     
     def update(self, weight, grad_weight):
         if self.m is None:
@@ -33,13 +55,23 @@ class Adam():
         self.m = self.b1 * self.m + (1 - self.b1) * grad_weight
         self.v = self.b2 * self.v + (1 - self.b2) * grad_weight ** 2
 
-        self.t += 1
         m_hat = self.m / (1 - self.b1**self.t)
         v_hat = self.v / (1 - self.b2**self.t)
+        self.t += 1
+
+        if (self.dynamic_lr):
+            self.step()
 
         self.weight_update = self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
         return weight - self.weight_update
+
+    # Learning rate scheduler methods
+    def get_learning_rate(self):
+        return self.factor * (self.model_size ** (-0.5)) * min(self.t ** (-0.5), 
+                                                                  self.t * self.warmup ** (-1.5))
+    def step(self):
+        self.learning_rate = self.get_learning_rate()  
 
 # Gradient clipping by norm
 def gradient_clip(gradient, max_norm = 5.0):

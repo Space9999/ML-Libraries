@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import math
 import copy
@@ -7,7 +11,7 @@ import utils.Base_Neural_Network as NN
 import utils.Optimizers as Optimizers
 
 # Fixed optimizer for all used layers
-optimizer = Optimizers.Adam()
+optimizer = Optimizers.Adam(dynamic_lr = True, model_size = 512, warmup = 400, factor = 1)
 
 # References: https://brandonrohrer.com/transformers.html, https://github.com/jsbaan/transformer-from-scratch
 class MultiHeadAttention():
